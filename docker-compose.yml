@@ -1,0 +1,99 @@
+version: "3.8"
+
+services:
+  webserver:
+    build:
+      context: ./src/
+      dockerfile: Dockerfile.php81
+    container_name: "${WEBSERVER_CONTAINER_NAME}"
+    volumes:
+      - ./src/backend:/var/www/html
+      - ./config/php/php.ini:/usr/local/etc/php/php.ini
+      - ./config/ssl:/etc/apache2/ssl/
+      - ./config/vhosts:/etc/apache2/sites-enabled
+      - ./logs/apache2:/var/log/apache2
+      - ./config/etc/hosts:/etc/hosts
+      - ./config/etc/supervisord.conf:/etc/supervisor/conf.d/supervisord.conf
+    restart: "always"
+    depends_on:
+      - mysql
+      - redis
+    links:
+      - mysql
+      - redis
+    environment:
+      PMA_PORT: ${PMA_UNSECURE_PORT}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_PORT: ${MYSQL_PORT}
+      REDIS_HOST: redis
+      MYSQL_HOST: mysql
+    ports:
+      - "${WEBSERVER_UNSECURE_HOST_PORT-80}:80"
+      - "${WEBSERVER_SECURE_HOST_PORT-443}:443"
+
+  mysql:
+    build:
+      context: ./src/
+      dockerfile: Dockerfile.mariadb106
+    container_name: "${MYSQL_CONTAINER_NAME}"
+    restart: "always"
+    ports:
+      - "127.0.0.1:${MYSQL_PORT-3306}:3306"
+    volumes:
+      - ./config/initdb:/docker-entrypoint-initdb.d
+      - ./data/mysql:/var/lib/mysql
+      - ./logs/mysql:/var/log/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+  
+  phpmyadmin:
+    image: phpmyadmin
+    container_name: "${PMA_CONTAINER_NAME}"
+    links:
+      - mysql
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "${PMA_UNSECURE_PORT-8081}:80"
+      - "${PMA_SECURE_PORT-8082}:443"
+    volumes:
+      - ./data/phpmyadmin:/sessions
+      - ./config/php/php.ini:/usr/local/etc/php/conf.d/php-phpmyadmin.ini
+  
+  redis:
+    container_name: "${REDIS_CONTAINER_NAME}"
+    image: redis:latest
+    volumes:
+      - ./data/redis:/data
+    ports:
+      - "127.0.0.1:${REDIS_PORT-6379}:6379"
+
+  frontend:
+    build: 
+      context: ./src/
+      dockerfile: Dockerfile.node18
+    container_name: "${FRONTEND_CONTAINER_NAME}"
+    restart: "always"
+    depends_on:
+      - webserver
+    ports:
+      - ${FRONTEND_HOST_PORT-3000}:3000
+      - ${NUXT_HMR_PORT-24678}:24678
+    volumes:
+      - ./src/frontend:/frontend
+      - node_modules-data:/frontend/node_modules
+
+volumes:
+  node_modules-data:

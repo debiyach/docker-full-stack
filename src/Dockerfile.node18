@@ -1,0 +1,21 @@
+# see https://docs.docker.com/engine/reference/builder/#understand-how-arg-and-from-interact
+ARG NODE_VERSION=node:18-slim
+
+FROM $NODE_VERSION AS dependency-base
+
+# create destination directory
+RUN mkdir -p /frontend
+WORKDIR /frontend
+
+# copy the app, note .dockerignore
+COPY ./frontend/package.json .
+COPY ./frontend/package-lock.json .
+
+# install dependencies
+RUN yarn install
+
+# transfer files to be used in the development
+COPY ./frontend .
+
+# start the development
+CMD [ "npm", "run", "dev" ]
